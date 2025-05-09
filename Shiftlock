@@ -1,0 +1,221 @@
+-- Gui to Lua (Modified - v3 - Draggable)
+-- Version: 3.2 (Modified)
+
+-- Instances:
+
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local player = Players.LocalPlayer
+
+-- Check for required services
+if not UserInputService or not Players or not RunService then
+    warn("Missing required services.  Shiftlock script cannot function.")
+    return  -- Exit the script if any service is missing
+end
+
+-- Check if we are on a mobile device
+if not UserInputService.TouchEnabled or UserInputService.MouseEnabled then
+    --print("Not a mobile device.  Shiftlock script will not be active.")
+    return -- Exit if not a touch device, OR if mouse is also enabled (it's a PC)
+end
+
+local ShiftlockStarterGui
+local ImageButton
+local debounceTime = 0.2
+local lastPressTime = 0
+local active = nil  -- Initialize active to nil.  CRITICAL for proper cleanup.
+
+local function createUI()
+
+    local playerGui = player:WaitForChild("PlayerGui", 5)
+    if not playerGui then
+        warn("PlayerGui not found.  Shiftlock UI could not be created.")
+        return
+    end
+
+    -- Check if the UI already exists. If so, destroy and recreate.
+    if playerGui:FindFirstChild("Shiftlock (StarterGui)") then
+        playerGui["Shiftlock (StarterGui)"]:Destroy()
+    end
+
+
+    ShiftlockStarterGui = Instance.new("ScreenGui")
+    ImageButton = Instance.new("ImageButton")
+
+    --Properties:
+
+    ShiftlockStarterGui.Name = "Shiftlock (StarterGui)"
+    ShiftlockStarterGui.Parent = playerGui
+    ShiftlockStarterGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    ShiftlockStarterGui.ResetOnSpawn = false  -- CRITICAL:  Prevents removal on respawn.
+    ShiftlockStarterGui.DisplayOrder = 999
+
+
+    ImageButton.Parent = ShiftlockStarterGui
+    ImageButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    ImageButton.BackgroundTransparency = 1.000
+    ImageButton.Position = UDim2.new(0.921914339, 0, 0.552375436, 0)  -- Initial position
+    ImageButton.Size = UDim2.new(0.0636147112, 0, 0.0661305636, 0)
+    ImageButton.SizeConstraint = Enum.SizeConstraint.RelativeXX
+    ImageButton.Image = "http://www.roblox.com/asset/?id=182223762"
+    ImageButton.Modal = true -- CRITICAL: Prevents eating all inputs
+    ImageButton.Active = true -- CRUCIAL for Draggability
+
+    -- --- DRAGGABLE LOGIC --- --
+    local dragging = false
+    local dragStart = Vector2.new()
+    local startPos = UDim2.new()
+
+    ImageButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position  -- Record the initial touch position.
+            startPos = ImageButton.Position -- Record the button's starting position.
+        end
+    end)
+
+    ImageButton.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false  -- Stop dragging when the touch ends.
+        end
+    end)
+
+    RunService.RenderStepped:Connect(function()
+        if dragging then
+            local touchPos = UserInputService:GetTouchPosition() -- Use GetTouchPosition for mobile.
+            if not touchPos then return end -- Handles the rare case where touch position isn't available
+
+            local delta = touchPos - dragStart -- Calculate the change in position.
+            local newPos = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
+
+            -- --- CLAMPING (Keep button on screen) --- --
+            local guiInsetTop, guiInsetBottom = UserInputService.GuiInset.Top, UserInputService.GuiInset.Bottom
+            local buttonWidth = ImageButton.Size.X.Offset
+            local buttonHeight = ImageButton.Size.Y.Offset
+            local screenWidth = UserInputService.WindowSize.X
+            local screenHeight = UserInputService.WindowSize.Y
+
+            -- Calculate min/max positions, accounting for GuiInset and button size.
+            local minX = 0
+            local maxX = screenWidth - buttonWidth
+            local minY = guiInsetTop
+            local maxY = screenHeight - buttonHeight - guiInsetBottom
+
+            -- Clamp the new position.
+            newPos = UDim2.new(
+                newPos.X.Scale, math.clamp(newPos.X.Offset, minX, maxX),
+                newPos.Y.Scale, math.clamp(newPos.Y.Offset, minY, maxY)
+            )
+
+            ImageButton.Position = newPos  -- Update the button's position.
+        end
+    end)
+    -- --- END DRAGGABLE LOGIC --- --
+end
+
+-- Scripts:
+
+local function TLQOYN_fake_script()
+    local MobileCameraFramework = {}
+    local CAS = game:GetService("ContextActionService")
+    local character = player.Character or player.CharacterAdded:Wait()
+    local root = character:WaitForChild("HumanoidRootPart")
+    local humanoid = character.Humanoid
+    local camera = workspace.CurrentCamera
+
+    --Visiblity
+    uis = game:GetService("UserInputService")
+    ismobile = uis.TouchEnabled
+    ImageButton.Visible = ismobile
+
+    local states = {
+        OFF = "rbxasset://textures/ui/mouseLock_off@2x.png",
+        ON = "rbxasset://textures/ui/mouseLock_on@2x.png"
+    }
+    local MAX_LENGTH = 900000
+    --local active = false -- Moved to global scope, initialized above
+    local ENABLED_OFFSET = CFrame.new(1.7, 0, 0)
+    local DISABLED_OFFSET = CFrame.new(-1.7, 0, 0)
+    local function UpdateImage(STATE)
+        ImageButton.Image = states[STATE]
+    end
+    local function UpdateAutoRotate(BOOL)
+        humanoid.AutoRotate = BOOL
+    end
+    local function GetUpdatedCameraCFrame(ROOT, CAMERA)
+        return CFrame.new(root.Position, Vector3.new(CAMERA.CFrame.LookVector.X * MAX_LENGTH, root.Position.Y, CAMERA.CFrame.LookVector.Z * MAX_LENGTH))
+    end
+    local function EnableShiftlock()
+        UpdateAutoRotate(false)
+        UpdateImage("ON")
+        root.CFrame = GetUpdatedCameraCFrame(root, camera)
+        camera.CFrame = camera.CFrame * ENABLED_OFFSET
+    end
+
+    local function DisableShiftlock()
+        UpdateAutoRotate(true)
+        UpdateImage("OFF")
+        camera.CFrame = camera.CFrame * DISABLED_OFFSET
+        if active then -- VERY IMPORTANT: Check if active is not nil
+            active:Disconnect()
+            active = nil
+        end
+    end
+
+    UpdateImage("OFF")
+    --active = false -- Moved to global scope
+
+    function ShiftLock()
+        local currentTime = tick()
+        if currentTime - lastPressTime < debounceTime then
+            return
+        end
+        lastPressTime = currentTime
+        if not active then
+            active = RunService.RenderStepped:Connect(function()
+                EnableShiftlock()
+            end)
+        else
+            DisableShiftlock() -- Always call DisableShiftlock to clean up.
+        end
+    end
+    local ShiftLockButton = CAS:BindAction("ShiftLOCK", ShiftLock, false, "On")
+    CAS:SetPosition("ShiftLOCK", UDim2.new(0.8, 0, 0.8, 0))
+    ImageButton.MouseButton1Click:Connect(function()
+        ShiftLock() -- Call the ShiftLock function directly
+    end)
+
+    -- --- CHARACTER DEATH/RESPAWN HANDLING --- --
+    local function onCharacterRemoving(char)
+        DisableShiftlock() -- Clean up when the character is removed.
+    end
+
+    if character then -- Make sure to cleanup the old connection first
+        character.AncestryChanged:Connect(function(_,parent)
+            if parent == nil then
+                onCharacterRemoving(character)
+            end
+        end)
+    end
+
+
+    return MobileCameraFramework
+
+end
+
+
+
+createUI() -- Create the UI initially
+TLQOYN_fake_script() -- Call the shift-lock logic.
+
+-- Recreate the UI when the character is added.
+player.CharacterAdded:Connect(function(character)
+    wait(0.5) -- Short delay for character loading
+    createUI()
+    TLQOYN_fake_script() -- Call this again on respawn.
+
+end)
