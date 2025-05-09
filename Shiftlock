@@ -218,4 +218,4 @@ player.CharacterAdded:Connect(function(character)
     createUI()
     TLQOYN_fake_script() -- Call this again on respawn.
 
-end)
+end
